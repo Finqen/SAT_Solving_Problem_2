@@ -366,7 +366,7 @@ Data solveSAT(Data data) {
     ////////////////////////// CORE ALGORITHM  //////////////////////////
     if (data.canAbort())
         return data;
-    auto cnf = sortUnsatClauses(&data);
+    auto cnf = sortUnsatClauses(&data); // HEURISTICS
     vector<int> next_clause = getSmallestClause(cnf);
     vector<unordered_set<int>> ys;
     for (int i = 0; i < next_clause.size(); ++i) {
@@ -451,7 +451,7 @@ int solve_dimacs(const string& path) {
     cout << "[Steps: " << COUNTER << "] ";
 
     double time = (clock() - tStart);
-    textFile  << path << ", " << COUNTER << ", " << time << ", " << data.unsat << "\n";
+    textFile  << path << ", " << COUNTER << ", " << time << ", " << !data.unsat << "\n";
     printf("[Execution time: %.2fs]\n", (double) (clock() - tStart) / CLOCKS_PER_SEC);
     cout << "=====================================" << endl;
     return removeSatisfiedClauses(cnf, solution_check).empty() || data.unsat;
@@ -476,7 +476,7 @@ vector<string> get_test_files(const char *directory){
 }
 int main(){
     textFile.open("example.csv");
-    textFile << "file, steps, time, unsat" << "\n" ;
+    textFile << "file, steps, time, sat" << "\n" ;
     vector<string> paths = get_test_files("../inputs/test/sat");
     vector<string> paths2 = get_test_files("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
