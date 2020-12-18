@@ -475,7 +475,7 @@ vector<string> get_test_files(const char *directory){
     return paths;
 }
 int main(){
-    textFile.open("example.txt");
+    textFile.open("example.csv");
     textFile << "file, steps, time, unsat" << "\n" ;
     vector<string> paths = get_test_files("../inputs/test/sat");
     vector<string> paths2 = get_test_files("../inputs/test/unsat");
