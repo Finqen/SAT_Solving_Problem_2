@@ -1,1 +1,11 @@
 # SAT_Solving_Problem_2
+
+### JULIANO
+SOLUTION DIMACS and CACTUS (GUI STUFF)
+
+### FELIP
+¿¿¿????
+
+### BRANISLAV
+
+HEURISTICS
