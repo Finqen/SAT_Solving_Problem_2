@@ -451,7 +451,7 @@ int solve_dimacs(const string& path) {
     cout << "[Steps: " << COUNTER << "] ";
 
     double time = (clock() - tStart);
-    textFile  << COUNTER << "," << time << "\n";
+    textFile  << path << ", " << COUNTER << ", " << time << ", " << data.unsat << "\n";
     printf("[Execution time: %.2fs]\n", (double) (clock() - tStart) / CLOCKS_PER_SEC);
     cout << "=====================================" << endl;
     return removeSatisfiedClauses(cnf, solution_check).empty() || data.unsat;
@@ -476,11 +476,12 @@ vector<string> get_test_files(const char *directory){
 }
 int main(){
     textFile.open("example.txt");
-    textFile << "steps, time" << "\n" ;
+    textFile << "file, steps, time, unsat" << "\n" ;
     vector<string> paths = get_test_files("../inputs/test/sat");
     vector<string> paths2 = get_test_files("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
     bool correct = true;
+
     for (const auto& path : paths)
         correct = correct && solve_dimacs(path);
     textFile.close();
