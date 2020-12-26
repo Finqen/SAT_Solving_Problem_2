@@ -17,7 +17,8 @@
 using namespace std;
 
 ofstream textFile;
-
+ofstream solutionFile;
+int solutionNumber;
 int COUNTER = 0;
 // const auto MAX_THREADS = thread::hardware_concurrency();
 
@@ -443,15 +444,24 @@ int solve_dimacs(const string& path) {
         cout << "SOLVED! Solution is: ";
         sort(solution.begin(), solution.end(), [](int x, int y) { return abs(x) < abs(y); });
         printVector(solution);
-        cout << endl;
+
+        int beginIdx = path.rfind('/');
+        std::string filename = path.substr(beginIdx + 1);
+        solutionFile.open(filename);
+        solutionFile << "CNF test" << "\n" ;
+        solutionFile.close();
+
+        long time = (clock() - tStart);
+        textFile  << solutionNumber << "," << filename << "," << COUNTER << "," << time << "," << time*2 << "," << time*4 << "," << time*8 << "\n";
+        solutionNumber++;
+
     } else {
         cout << "Formula is UNSAT!" << endl;
     }
     unordered_set<int> solution_check(solution.begin(), solution.end());
     cout << "[Steps: " << COUNTER << "] ";
 
-    double time = (clock() - tStart);
-    textFile  << path << ", " << COUNTER << ", " << time << ", " << !data.unsat << "\n";
+
     printf("[Execution time: %.2fs]\n", (double) (clock() - tStart) / CLOCKS_PER_SEC);
     cout << "=====================================" << endl;
     return removeSatisfiedClauses(cnf, solution_check).empty() || data.unsat;
@@ -476,7 +486,7 @@ vector<string> get_test_files(const char *directory){
 }
 int main(){
     textFile.open("example.csv");
-    textFile << "file, steps, time[ms], sat" << "\n" ;
+    textFile << "#,file,steps,time_problem1[ms],time_problem2[ms],time_problem3[ms],time_problem4[ms]" << "\n" ;
     vector<string> paths = get_test_files("../inputs/test/sat");
     vector<string> paths2 = get_test_files("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
