@@ -16,7 +16,8 @@
 
 using namespace std;
 
-ofstream textFile;
+ofstream textFileTimes;
+ofstream textFileSteps;
 ofstream solutionFile;
 int COUNTER = 0;
 // const auto MAX_THREADS = thread::hardware_concurrency();
@@ -449,6 +450,7 @@ Data solveSAT(Data data) {
 
 /* Starts the recursive sat-solver calls and sotres data accordingly in files. */
 int solve_dimacs(const string &path, Algorithm::Version algorithm) {
+    bool sat;
     clock_t tStart = clock();
     srand(unsigned(time(nullptr)));
     cout << "Path: " << path << endl;
@@ -482,22 +484,37 @@ int solve_dimacs(const string &path, Algorithm::Version algorithm) {
         cout << "SOLVED! Solution is: ";
         sort(solution.begin(), solution.end(), [](int x, int y) { return abs(x) < abs(y); });
         printVector(solution);
+        sat = true;
+
     } else {
         cout << "Formula is UNSAT!" << endl;
+        sat = false;
     }
 
-    int beginIdx = path.rfind('/');
-    std::string filename = path.substr(beginIdx + 1);
-    solutionFile.open(filename);
-    solutionFile << "CNF test" << "\n";
-    solutionFile.close();
+    if (algorithm == Algorithm::DEFAULT) {
+        int beginIdx = path.rfind('/');
+        std::string filename = path.substr(beginIdx + 1);
+        solutionFile.open(filename);
+        if(sat){
+            solutionFile << "s SATISFIABLE" << "\n";
+            solutionFile << "v ";
+            for (int j : solution) {
+                solutionFile << j << " ";
+            }
+            solutionFile << 0;
+        } else {
+            solutionFile << "s UNSATISFIABLE" << "\n";
+        }
+
+        solutionFile.close();
+    }
 
     long time = (clock() - tStart);
-    textFile << "," << time;
+    textFileTimes << "," << time;
 
     unordered_set<int> solution_check(solution.begin(), solution.end());
     cout << "[Steps: " << COUNTER << "] ";
-
+    textFileSteps << "," << COUNTER;
 
     printf("[Execution time: %.2fs]\n", (double) (clock() - tStart) / CLOCKS_PER_SEC);
     cout << "=====================================" << endl;
@@ -525,22 +542,29 @@ vector<string> get_test_files(const char *directory) {
 
 /* Main loop; loads in all /test files and starts the solving process. */
 int main() {
-    textFile.open("example.csv");
-    textFile << "Algorithm,file,steps";
+    textFileTimes.open("times.csv");
+    textFileSteps.open("steps.csv");
+    textFileTimes << "Algorithm";
+    textFileSteps << "Algorithm";
     vector<string> paths = get_test_files("../inputs/test/sat");
     vector<string> paths2 = get_test_files("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
     bool correct = true;
 
-    for (int i = 0; i < paths.size(); ++i)
-        textFile << "," << i;
+    for (int i = 0; i < paths.size(); ++i) {
+        textFileTimes << "," << i;
+        textFileSteps << "," << i;
+    }
+
 
     for (const auto algorithm : Algorithm::All) {
-        textFile << "\n" << Algorithm::getVersionName(algorithm);
+        textFileTimes << "\n" << Algorithm::getVersionName(algorithm);
+        textFileSteps << "\n" << Algorithm::getVersionName(algorithm);
         for (const auto &path : paths)
             correct = correct && solve_dimacs(path, algorithm);
     }
 
-    textFile.close();
+    textFileTimes.close();
+    textFileSteps.close();
     return !correct;
 }
