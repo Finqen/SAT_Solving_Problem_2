@@ -25,22 +25,24 @@ int COUNTER = 0;
 /* Namespace to defince variations of algorithms. */
 namespace Algorithm {
     enum Version {
-        DEFAULT, NO_PREP, NO_AUTARK, NO_HEURISTIC
+        DEFAULT, NO_PREP, NO_AUTARK, NO_HEURISTIC, HEU_VAR,
     };
-    static const Version All[] = {DEFAULT, NO_PREP, NO_AUTARK, NO_HEURISTIC};
+    static const Version All[] = {DEFAULT, HEU_VAR, NO_AUTARK, NO_HEURISTIC, NO_PREP};
 
     string getVersionName(enum Version algorithm) {
         switch (algorithm) {
-            case DEFAULT:
-                return "Default";
             case NO_PREP:
                 return "No preprocessing";
             case NO_AUTARK:
                 return "No autark";
             case NO_HEURISTIC:
                 return "No heuristic";
+            case HEU_VAR:
+                return "Heuristic Variables";
+            case DEFAULT:
+                return "Heuristic Literals";
             default:
-                return "?";
+                return "Something went wrong?!";
         }
     }
 }
@@ -359,14 +361,44 @@ void removeSubsumedClauses(Data *data) {
     }
 }
 
-/* Sort unsat clauses, used for heuristics when there exist multiple "smallest" clauses of the same size. */
-vector<vector<int>> sortUnsatClauses(Data *data, int order = -1) {
+/* Sort unsat clauses, used for heuristics when there exist multiple "smallest" clauses of the same size.
+ * Here, solely the number of literal (not variable) occurrence is of importance!
+ * We first need to sort clauses, the the order within the clauses! */
+vector<vector<int>> sortUnsatClauses_literals(Data *data, int order = -1) {
+    vector<tuple<int, int>> cnf_ordered;
+    for (int i : data->cnf_unsat) {
+        int v = 0;
+        for (auto item : data->cnf[i]) {
+            v += data->get_literal_count(item);
+        }
+        v *= order;
+        cnf_ordered.emplace_back(v, i);
+    }
+    sort(cnf_ordered.begin(), cnf_ordered.end());
+
+    vector<vector<int>> cnf_;
+    for (auto p :cnf_ordered) {
+        vector<int> clause_ = data->cnf[get<1>(p)];
+        sort(clause_.begin(), clause_.end(), [&data, &order](int x, int y) {
+            int a = data->get_literal_count(x);
+            int b = data->get_literal_count(y);
+            return a*order < b*order;
+        });
+        cnf_.push_back(clause_);
+    }
+    return cnf_;
+}
+
+/* Sort unsat clauses, used for heuristics when there exist multiple "smallest" clauses of the same size.
+ * Here, the number of variable (not literal) occurrence is of importance!
+ * We first need to sort clauses, the the order within the clauses! */
+vector<vector<int>> sortUnsatClauses_variables(Data *data, int order = -1) {
     vector<tuple<int, int, int>> cnf_ordered;
     for (int i : data->cnf_unsat) {
         int v = 0;
         int v2 = 0;
         for (auto item : data->cnf[i]) {
-            item += data->get_literal_count(item) + data->get_literal_count(-item);
+            v += data->get_literal_count(item) + data->get_literal_count(-item);
             v2 += data->get_literal_count(item) * data->get_literal_count(-item);
         }
         v *= order;
@@ -378,7 +410,7 @@ vector<vector<int>> sortUnsatClauses(Data *data, int order = -1) {
     vector<vector<int>> cnf_;
     for (auto p :cnf_ordered) {
         vector<int> clause_ = data->cnf[get<2>(p)];
-        sort(clause_.begin(), clause_.end(), [&data](int x, int y) {
+        sort(clause_.begin(), clause_.end(), [&data, &order](int x, int y) {
             int a = data->get_literal_count(x);
             int b = data->get_literal_count(y);
             int a2 = data->get_literal_count(-x);
@@ -416,10 +448,13 @@ Data solveSAT(Data data) {
     if (data.canAbort())
         return data;
     vector<vector<int>> cnf;
-    if (data.algorithm != Algorithm::Version::NO_HEURISTIC)
-        cnf = sortUnsatClauses(&data); // !!!!!! THIS HERE IS THE HEURISTIC!!!!!!!!!!!!
-    else
+    // HEURISTICS !!!!!!!!!!!!!!! HEURISTICS !!!!!!!!!!!!!!!
+    if (data.algorithm == Algorithm::Version::NO_HEURISTIC)
         cnf = data.getUnsatClauses();
+    else if (data.algorithm == Algorithm::Version::HEU_VAR)
+        cnf = sortUnsatClauses_variables(&data);
+    else
+        cnf = sortUnsatClauses_literals(&data);
     vector<int> next_clause = getSmallestClause(cnf);
     vector<unordered_set<int>> ys;
     for (int i = 0; i < next_clause.size(); ++i) {
@@ -495,7 +530,7 @@ int solve_dimacs(const string &path, Algorithm::Version algorithm) {
         int beginIdx = path.rfind('/');
         std::string filename = path.substr(beginIdx + 1);
         solutionFile.open(filename);
-        if(sat){
+        if (sat) {
             solutionFile << "s SATISFIABLE" << "\n";
             solutionFile << "v ";
             for (int j : solution) {
@@ -555,7 +590,6 @@ int main() {
         textFileTimes << "," << i;
         textFileSteps << "," << i;
     }
-
 
     for (const auto algorithm : Algorithm::All) {
         textFileTimes << "\n" << Algorithm::getVersionName(algorithm);
