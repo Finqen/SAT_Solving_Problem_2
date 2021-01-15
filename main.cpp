@@ -25,9 +25,10 @@ int COUNTER = 0;
 /* Namespace to defince variations of algorithms. */
 namespace Algorithm {
     enum Version {
-        DEFAULT, NO_PREP, NO_AUTARK, NO_HEURISTIC, HEU_VAR,
+        DEFAULT, NO_PREP, NO_AUTARK, NO_HEURISTIC, HEU_LIT,
     };
-    static const Version All[] = {DEFAULT, HEU_VAR, NO_AUTARK, NO_HEURISTIC, NO_PREP};
+    static const Version All[] = {DEFAULT, HEU_LIT, NO_AUTARK, NO_HEURISTIC, NO_PREP};
+    static const Version Default[] = {DEFAULT};
 
     string getVersionName(enum Version algorithm) {
         switch (algorithm) {
@@ -37,10 +38,10 @@ namespace Algorithm {
                 return "No autark";
             case NO_HEURISTIC:
                 return "No heuristic";
-            case HEU_VAR:
-                return "Heuristic Variables";
-            case DEFAULT:
+            case HEU_LIT:
                 return "Heuristic Literals";
+            case DEFAULT:
+                return "Heuristic Variables";
             default:
                 return "Something went wrong?!";
         }
@@ -379,10 +380,10 @@ vector<vector<int>> sortUnsatClauses_literals(Data *data, int order = -1) {
     vector<vector<int>> cnf_;
     for (auto p :cnf_ordered) {
         vector<int> clause_ = data->cnf[get<1>(p)];
-        sort(clause_.begin(), clause_.end(), [&data, &order](int x, int y) {
+        sort(clause_.begin(), clause_.end(), [&data](int x, int y) {
             int a = data->get_literal_count(x);
             int b = data->get_literal_count(y);
-            return a*order < b*order;
+            return a < b;
         });
         cnf_.push_back(clause_);
     }
@@ -410,7 +411,7 @@ vector<vector<int>> sortUnsatClauses_variables(Data *data, int order = -1) {
     vector<vector<int>> cnf_;
     for (auto p :cnf_ordered) {
         vector<int> clause_ = data->cnf[get<2>(p)];
-        sort(clause_.begin(), clause_.end(), [&data, &order](int x, int y) {
+        sort(clause_.begin(), clause_.end(), [&data](int x, int y) {
             int a = data->get_literal_count(x);
             int b = data->get_literal_count(y);
             int a2 = data->get_literal_count(-x);
@@ -451,10 +452,10 @@ Data solveSAT(Data data) {
     // HEURISTICS !!!!!!!!!!!!!!! HEURISTICS !!!!!!!!!!!!!!!
     if (data.algorithm == Algorithm::Version::NO_HEURISTIC)
         cnf = data.getUnsatClauses();
-    else if (data.algorithm == Algorithm::Version::HEU_VAR)
-        cnf = sortUnsatClauses_variables(&data);
-    else
+    else if (data.algorithm == Algorithm::Version::HEU_LIT)
         cnf = sortUnsatClauses_literals(&data);
+    else
+        cnf = sortUnsatClauses_variables(&data);
     vector<int> next_clause = getSmallestClause(cnf);
     vector<unordered_set<int>> ys;
     for (int i = 0; i < next_clause.size(); ++i) {
@@ -584,6 +585,7 @@ int main() {
     vector<string> paths = get_test_files("../inputs/test/sat");
     vector<string> paths2 = get_test_files("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
+    //paths = {"../inputs/sat/uf50-04.cnf"};
     bool correct = true;
 
     for (int i = 0; i < paths.size(); ++i) {
@@ -600,5 +602,9 @@ int main() {
 
     textFileTimes.close();
     textFileSteps.close();
+    if(!correct)
+        std::cout << "SOLUTION NOT CORRECT: SOMETHING WENT WRONG!";
+    else
+        std::cout << "SOLUTION CORRECT & CHECKED!";
     return !correct;
 }
