@@ -649,10 +649,10 @@ int main() {
     vector<string> paths = getTestFiles("../inputs/test/sat");
     vector<string> paths2 = getTestFiles("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
-    paths = getTestFiles("../inputs/test/more_complex_tests");
-    //paths = {"../inputs/sat/uf50-08.cnf","../inputs/sat/uf50-09.cnf"};
-    //paths = {"../inputs/sat/aim-100-1_6-yes1-3.cnf"};
-    //paths = {"../inputs/unsat/aim-100-2_0-no-3.cnf"};
+    // paths = getTestFiles("../inputs/test/more_complex_tests");
+    // paths = {"../inputs/sat/uf50-08.cnf","../inputs/sat/uf50-09.cnf"};
+    // paths = {"../inputs/sat/aim-100-1_6-yes1-3.cnf"};
+    // paths = {"../inputs/unsat/aim-100-2_0-no-3.cnf"};
     bool correct = true;
 
     for (int i = 0; i < paths.size(); ++i) {
@@ -660,7 +660,7 @@ int main() {
         textFileSteps << "," << i;
     }
 
-    for (const auto algorithm : Algorithm::All) {
+    for (const auto algorithm : Algorithm::Default) {
         textFileTimes << "\n" << Algorithm::getVersionName(algorithm);
         textFileSteps << "\n" << Algorithm::getVersionName(algorithm);
         for (const auto &path : paths)
