@@ -25,19 +25,23 @@ int COUNTER = 0;
 /* Namespace to define variations of algorithms that bundles names as access points */
 namespace Algorithm {
     enum Version {
-        DEFAULT, NO_PREP, NO_AUTARKIC, NO_HEURISTIC, HEU_LIT,
+        DEFAULT, NO_PREP, NOT_AUTARTIC, NO_HEURISTIC, HEU_LIT,
     };
     // All: Contains all variants
-    static const Version All[] = {DEFAULT, HEU_LIT, NO_AUTARKIC, NO_HEURISTIC, NO_PREP};
+    // Keep in mind that using "no preprocessing" might result in notably horrific runtime.
+    static const Version All[] = {DEFAULT, HEU_LIT, NOT_AUTARTIC, NO_HEURISTIC, NO_PREP};
     // Contains only the default variant
     static const Version Default[] = {DEFAULT};
+    // Contains variants that use pre-processing
+    static const Version WithPP[] = {DEFAULT, HEU_LIT, NOT_AUTARTIC, NO_HEURISTIC};
+
 
     // Return a more informative string if needed.
     string getVersionName(enum Version algorithm) {
         switch (algorithm) {
             case NO_PREP:
                 return "No preprocessing";
-            case NO_AUTARKIC:
+            case NOT_AUTARTIC:
                 return "No autarkic";
             case NO_HEURISTIC:
                 return "No heuristic";
@@ -517,7 +521,7 @@ Data solveSAT(Data data) {
         assignmentNew.insert(nextClause[i]);
         for (int j = 0; j < i; ++j)
             assignmentNew.insert(-nextClause[j]);
-        if (isAutarkic(cnf, assignmentNew) && data.algorithm != Algorithm::Version::NO_AUTARKIC) {
+        if (isAutarkic(cnf, assignmentNew) && data.algorithm != Algorithm::Version::NOT_AUTARTIC) {
             data.addSolutions(assignmentNew);
             return solveSAT(data);
         }
@@ -645,7 +649,10 @@ int main() {
     vector<string> paths = getTestFiles("../inputs/test/sat");
     vector<string> paths2 = getTestFiles("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
-    //paths = {"../inputs/sat/uf50-016.cnf"};
+    // paths = {"../inputs/sat/uf50-08.cnf"};
+    //paths = {"../inputs/sat/uf50-08.cnf","../inputs/sat/uf50-09.cnf"};
+    //paths = {"../inputs/sat/aim-100-1_6-yes1-3.cnf"};
+    //paths = {"../inputs/unsat/aim-100-2_0-no-3.cnf"};
     bool correct = true;
 
     for (int i = 0; i < paths.size(); ++i) {
