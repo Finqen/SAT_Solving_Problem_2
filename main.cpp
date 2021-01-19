@@ -22,14 +22,17 @@ ofstream solutionFile;
 int COUNTER = 0;
 // const auto MAX_THREADS = thread::hardware_concurrency();
 
-/* Namespace to defince variations of algorithms. */
+/* Namespace to define variations of algorithms that bundles names as acess points */
 namespace Algorithm {
     enum Version {
         DEFAULT, NO_PREP, NO_AUTARK, NO_HEURISTIC, HEU_LIT,
     };
+    // All: Contains all variants
     static const Version All[] = {DEFAULT, HEU_LIT, NO_AUTARK, NO_HEURISTIC, NO_PREP};
+    // Contains only the default variant
     static const Version Default[] = {DEFAULT};
 
+    // Return a more informative string if needed.
     string getVersionName(enum Version algorithm) {
         switch (algorithm) {
             case NO_PREP:
@@ -48,6 +51,7 @@ namespace Algorithm {
     }
 }
 
+// Helper-function to print a vector to the console.
 void printVector(const vector<int> &vector) { /* Prints a vector. */
     cout << "[ ";
     for (int j : vector) {
@@ -63,9 +67,19 @@ void printVectorOfVectors(const vector<vector<int>> &vector) { /* Prints a vecto
     cout << endl;
 }
 
+/**
+ * The main data structure used to encode the SAT problem.
+ * cnf: stores a CNF in form of a list of lists.
+ * clauses_remaining: The indexes of the remaining clauses (that are not fulfilled yet).
+ * unassigned_vars: A set of variables that have no assignment yet.
+ * resolutions: Store the resolutions. Since order matters (LIFO), we use a stack.
+ * literal_to_clause: Mapping from literal to its occurence in the respective clauses.
+ * unsat: Is the formula UNSAT?
+ * algorithm: Reference to the underlying algorithm variant.
+ */
 struct Data {
     vector<vector<int>> cnf;
-    vector<int> cnf_unsat;
+    vector<int> clauses_remaining;
     unordered_set<int> assigned_vars;
     unordered_set<int> unassigned_vars;
     stack<vector<int>> resolutions;
@@ -78,7 +92,7 @@ struct Data {
         this->cnf = cnf;
         this->algorithm = algorithm;
         for (int i = 0; i < cnf.size(); ++i) {
-            cnf_unsat.push_back(i);
+            clauses_remaining.push_back(i);
             for (auto v : cnf[i]) {
                 this->unassigned_vars.insert(abs(v));
                 this->literal_to_clause[v].push_back(i);
@@ -86,15 +100,17 @@ struct Data {
         }
     }
 
-    /* Returns true if unsat or sat. */
+    /* Returns true if unsat or sat.
+     * A function is set to be sat if clauses_remaining.empty is true, that is, if all
+     * clauses are satisfied */
     bool canAbort() const {
-        return unsat || cnf_unsat.empty();
+        return unsat || clauses_remaining.empty();
     }
 
     /* Returns all clauses which are not yet satisfied. */
-    vector<vector<int>> getUnsatClauses() {
+    vector<vector<int>> getRemainingClauses() {
         vector<vector<int>> temp;
-        for (auto i: cnf_unsat)
+        for (auto i: clauses_remaining)
             temp.push_back(cnf[i]);
         return temp;
     }
@@ -106,7 +122,8 @@ struct Data {
 
     /* Removes a clause from the unsatisfied list, but updaes all parameters accordingly. */
     void discard_clause(int index) {
-        cnf_unsat.erase(remove(cnf_unsat.begin(), cnf_unsat.end(), index), cnf_unsat.end());
+        clauses_remaining.erase(remove(clauses_remaining.begin(), clauses_remaining.end(), index),
+                                clauses_remaining.end());
         for (auto v : cnf[index]) {
             literal_to_clause[v].erase(remove(literal_to_clause[v].begin(),
                                               literal_to_clause[v].end(), index), literal_to_clause[v].end());
@@ -121,7 +138,8 @@ struct Data {
         //Remove satisfied clauses.
         vector<int> clauses(literal_to_clause[v]);
         for (auto i : clauses) {
-            cnf_unsat.erase(remove(cnf_unsat.begin(), cnf_unsat.end(), i), cnf_unsat.end());
+            clauses_remaining.erase(remove(clauses_remaining.begin(), clauses_remaining.end(), i),
+                                    clauses_remaining.end());
             for (int v2 : cnf[i])
                 literal_to_clause[v2].erase(remove(literal_to_clause[v2].begin(),
                                                    literal_to_clause[v2].end(), i),
@@ -143,28 +161,36 @@ struct Data {
             add_solution(v);
     }
 
-    /* Performs the resolution rule as states in the script for a variable. */
+    /* Performs the resolution rule as stated in the script for a given variable.
+     * Assumes the literal and its negation occur both exactly once.
+     */
     void resolve(int literal) {
         int a = literal_to_clause[literal][0];
         int b = literal_to_clause[-literal][0];
+        // Check if equal.
         if (a == b) {
-            add_solution(literal);
+            add_solution(abs(literal));
             return;
         }
         unassigned_vars.erase(abs(literal));
+        // Merge both clauses.
         cnf[a].insert(cnf[a].end(), cnf[b].begin(), cnf[b].end());
+        // Discard one of them.
         discard_clause(b);
         //Re-reference literals.
         for (int v : cnf[b]) {
-            literal_to_clause[v].erase(remove(literal_to_clause[v].begin(),
-                                              literal_to_clause[v].end(), a), literal_to_clause[v].end());
-            literal_to_clause[v].push_back(a);
+            if (!count(literal_to_clause[v].begin(), literal_to_clause[v].end(), a))
+                literal_to_clause[v].push_back(a);
         }
+        // Put the negated literal at the end of the vector (so we can access it easier later on).
         cnf[b].erase(remove(cnf[b].begin(), cnf[b].end(), -literal), cnf[b].end());
         cnf[b].push_back(-literal);
+        // Add to the resolution history.
         resolutions.push(cnf[b]);
+        // Delete literals from resolved clause.
         cnf[a].erase(remove(cnf[a].begin(), cnf[a].end(), literal), cnf[a].end());
         cnf[a].erase(remove(cnf[a].begin(), cnf[a].end(), -literal), cnf[a].end());
+        // Clear literal(s).
         literal_to_clause[-literal].clear();
         literal_to_clause[literal].clear();
         // Remove duplicates.
@@ -175,11 +201,13 @@ struct Data {
 
 /* Eliminates clauses that contain both, a variable and its negation, in the same clause. */
 void eliminateTautologies(Data *data) {
-    vector<int> cnf_(data->cnf_unsat);
+    vector<int> cnf_(data->clauses_remaining);
     for (auto i : cnf_) {
         for (auto c : data->cnf[i]) {
             if (find(data->cnf[i].begin(), data->cnf[i].end(), -c) != data->cnf[i].end()) {
-                data->add_solution(abs(c));
+                //If we have a tautology we can ignore the clause,
+                // but do not assign any new variable to the solution!
+                data->discard_clause(i);
                 break;
             }
         }
@@ -209,7 +237,8 @@ vector<vector<int>> loadDimacsCnf(const string &path) {
     return cnf;
 }
 
-/* Transforms any CNF to 3-SAT. */
+/* Transforms any CNF to 3-SAT.
+ * We do not use this in our version, since the resolution rule sort of "undoes" the procedure. */
 vector<vector<int>> to3SAT(const vector<vector<int>> &cnf) {
     cout << "Transforming CNF to 3-SAT..." << endl;
     vector<vector<int>> three_sat;
@@ -239,7 +268,7 @@ vector<vector<int>> to3SAT(const vector<vector<int>> &cnf) {
 /* Removes clauses that contain only one literal and assigns those as solutions. */
 void removeUnitClauses(Data *data) {
     // cout << "Determining and removing unit clauses and literals." << endl;
-    vector<int> cnf_(data->cnf_unsat);
+    vector<int> cnf_(data->clauses_remaining);
     for (auto i : cnf_)
         if (data->cnf[i].size() == 1)
             data->add_solution(data->cnf[i][0]);
@@ -260,12 +289,15 @@ void removePureLiterals(Data *data) {
     }
 }
 
-/* Performs the resolution rule, as states in the script (which is similar to combining clauses). */
+/* Performs the resolution rule, as states in the script (which is similar to combining clauses).
+ * Must be called last but before subsumption when used in conjunction with other preprocessing reductions!
+ */
 void performResolutionRule(Data *data) {
     unordered_set<int> vars_(data->unassigned_vars);
     for (auto literal : vars_) {
-        if (data->get_literal_count(literal) == 1 && data->get_literal_count(-literal) == 1)
+        if (data->get_literal_count(literal) == 1 && data->get_literal_count(-literal) == 1) {
             data->resolve(literal);
+        }
     }
 }
 
@@ -303,6 +335,28 @@ removeSatisfiedClauses(const vector<vector<int>> &cnf, unordered_set<int> alpha)
     }
     // cout << "Done! (Clauses old: " << cnf.size() << " | Clauses new: " << filtered_cnf.size() << ")." << endl;
     return filtered_cnf;
+}
+
+
+/* We will use a third check/test to make sure that our solution is correct. Here, we scrutinize
+ * whether the intersection of the solution and each clause is non-empty.
+ */
+bool verify_solution(const vector<vector<int>> &cnf, const unordered_set<int> &alpha) {
+    for (const vector<int> &clause : cnf) {
+        bool correct = false;
+        for (int v : clause) {
+            if(alpha.count(v)){
+            //cout << "\n"<< v;
+            //printVector(clause);
+            correct = true;
+            break;
+            }
+        }
+        if (!correct) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /* Returns true if there exists a conflict in the solution, i.e same variables is assigned two different ground-truths . */
@@ -346,7 +400,7 @@ unordered_set<int> getVariables(const vector<vector<int>> &cnf, bool absolute = 
 
 /* Performs the subsumation rule. */
 void removeSubsumedClauses(Data *data) {
-    vector<int> cnf_unsat_(data->cnf_unsat);
+    vector<int> cnf_unsat_(data->clauses_remaining);
     vector<vector<int>> cnf_(data->cnf);
     for (int i : cnf_unsat_)
         sort(cnf_[i].begin(), cnf_[i].end());
@@ -367,7 +421,7 @@ void removeSubsumedClauses(Data *data) {
  * We first need to sort clauses, the the order within the clauses! */
 vector<vector<int>> sortUnsatClauses_literals(Data *data, int order = -1) {
     vector<tuple<int, int>> cnf_ordered;
-    for (int i : data->cnf_unsat) {
+    for (int i : data->clauses_remaining) {
         int v = 0;
         for (auto item : data->cnf[i]) {
             v += data->get_literal_count(item);
@@ -395,7 +449,7 @@ vector<vector<int>> sortUnsatClauses_literals(Data *data, int order = -1) {
  * We first need to sort clauses, the the order within the clauses! */
 vector<vector<int>> sortUnsatClauses_variables(Data *data, int order = -1) {
     vector<tuple<int, int, int>> cnf_ordered;
-    for (int i : data->cnf_unsat) {
+    for (int i : data->clauses_remaining) {
         int v = 0;
         int v2 = 0;
         for (auto item : data->cnf[i]) {
@@ -451,7 +505,7 @@ Data solveSAT(Data data) {
     vector<vector<int>> cnf;
     // HEURISTICS !!!!!!!!!!!!!!! HEURISTICS !!!!!!!!!!!!!!!
     if (data.algorithm == Algorithm::Version::NO_HEURISTIC)
-        cnf = data.getUnsatClauses();
+        cnf = data.getRemainingClauses();
     else if (data.algorithm == Algorithm::Version::HEU_LIT)
         cnf = sortUnsatClauses_literals(&data);
     else
@@ -476,7 +530,7 @@ Data solveSAT(Data data) {
         if (d.unsat)
             continue;
         d = solveSAT(d);
-        if (!d.unsat && d.cnf_unsat.empty())
+        if (!d.unsat && d.clauses_remaining.empty())
             return d;
     }
     data.unsat = true;
@@ -501,10 +555,12 @@ int solve_dimacs(const string &path, Algorithm::Version algorithm) {
     data = solveSAT(data);
     ///
     vector<int> solution;
+
     if (!data.unsat) {
         for (int v : data.assigned_vars)
             if (orig_vars.find(v) != orig_vars.end() || orig_vars.find(-v) != orig_vars.end())
                 solution.push_back(v);
+        // Add resolved variables accordingly.
         while (!data.resolutions.empty()) {
             auto vec = data.resolutions.top();
             int literal = vec.back();
@@ -514,19 +570,23 @@ int solve_dimacs(const string &path, Algorithm::Version algorithm) {
                     solution.push_back(-literal);
                 else
                     solution.push_back(literal);
-            }
+            } else
+                solution.push_back(literal);
             data.resolutions.pop();
         }
+        // Add variables that can have either ground truth assignment (i.e pos/neg).
+        // We will assign them a positive ground truth per default.
+        for (auto v : data.unassigned_vars)
+            solution.push_back(v);
+        // Print solution.
         cout << "SOLVED! Solution is: ";
         sort(solution.begin(), solution.end(), [](int x, int y) { return abs(x) < abs(y); });
         printVector(solution);
         sat = true;
-
     } else {
         cout << "Formula is UNSAT!" << endl;
         sat = false;
     }
-
     if (algorithm == Algorithm::DEFAULT) {
         int beginIdx = path.rfind('/');
         std::string filename = path.substr(beginIdx + 1);
@@ -541,20 +601,20 @@ int solve_dimacs(const string &path, Algorithm::Version algorithm) {
         } else {
             solutionFile << "s UNSATISFIABLE" << "\n";
         }
-
         solutionFile.close();
     }
 
     long time = (clock() - tStart);
     textFileTimes << "," << time;
 
-    unordered_set<int> solution_check(solution.begin(), solution.end());
     cout << "[Steps: " << COUNTER << "] ";
     textFileSteps << "," << COUNTER;
 
     printf("[Execution time: %.2fs]\n", (double) (clock() - tStart) / CLOCKS_PER_SEC);
     cout << "=====================================" << endl;
-    return removeSatisfiedClauses(cnf, solution_check).empty() || data.unsat;
+    unordered_set<int> solution_check(solution.begin(), solution.end());
+    return data.unsat ||
+           (verify_solution(cnf, solution_check) && removeSatisfiedClauses(cnf, solution_check).empty());
 }
 
 /* Helper function to read in all files in a given directory. */
@@ -585,7 +645,7 @@ int main() {
     vector<string> paths = get_test_files("../inputs/test/sat");
     vector<string> paths2 = get_test_files("../inputs/test/unsat");
     paths.insert(paths.end(), paths2.begin(), paths2.end());
-    //paths = {"../inputs/sat/uf50-04.cnf"};
+    //paths = {"../inputs/sat/uf50-016.cnf"};
     bool correct = true;
 
     for (int i = 0; i < paths.size(); ++i) {
@@ -593,7 +653,7 @@ int main() {
         textFileSteps << "," << i;
     }
 
-    for (const auto algorithm : Algorithm::All) {
+    for (const auto algorithm : Algorithm::Default) {
         textFileTimes << "\n" << Algorithm::getVersionName(algorithm);
         textFileSteps << "\n" << Algorithm::getVersionName(algorithm);
         for (const auto &path : paths)
@@ -602,7 +662,9 @@ int main() {
 
     textFileTimes.close();
     textFileSteps.close();
-    if(!correct)
+    // Here we can double check if our solution is actually true, if not, print it!
+    // We can do that by feeding in the solution ot the entire CNF and see if it solves it.
+    if (!correct)
         std::cout << "SOLUTION NOT CORRECT: SOMETHING WENT WRONG!";
     else
         std::cout << "SOLUTION CORRECT & CHECKED!";
