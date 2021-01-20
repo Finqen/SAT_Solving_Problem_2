@@ -1,5 +1,9 @@
 # SAT Solving Problem 2
 
+### GitHub:
+
+> https://github.com/Finqen/SAT_Solving_Problem_2
+
 ## Remarks
 All compulsory and bonus tasks have been implemented.
 We added options to analyze the performance based on two criteria: "Execution time" (ET) & "Iteration steps" (IS).
