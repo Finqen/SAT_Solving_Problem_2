@@ -671,7 +671,7 @@ int main() {
     textFileSteps.close();
     // Here we can double check if our solution is actually true, if not, print it!
     // We can do that by feeding in the solution ot the entire CNF and see if it solves it.
-    if (correct)
+    if (!correct)
         std::cout << "SOMETHING WENT WRONG!";
     else
         std::cout << "SOLUTION CORRECT & CHECKED!";
