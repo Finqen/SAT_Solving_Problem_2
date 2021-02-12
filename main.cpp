@@ -503,7 +503,7 @@ Data solveSAT(Data data) {
         ////////////////////////// REMOVE SUBSUMED THREE CLAUSES ///////////////////////
         removeSubsumedClauses(&data);
     }
-    ////////////////////////// CORE ALGORITHM  //////////////////////////
+    ////////////////////////// CORE ALGORITHM (Monien-Speckenmeyer's) //////////////////////////
     if (data.canAbort())
         return data;
     vector<vector<int>> cnf;
